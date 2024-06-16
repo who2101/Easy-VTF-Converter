@@ -1,5 +1,8 @@
 import win32gui as w
-import re
+import comtypes.client
+import pygetwindow as gw
+import os
+
 
 
 def _normalise_text(controlText):
@@ -34,23 +37,36 @@ def window_iterator(hwnd, output):
 
 
 def get_explorer_window_paths():
-    windows = []
+    windows = gw.getAllWindows()
+
     paths = []
-    w.EnumWindows(window_iterator, windows)
 
     for window in windows:
-        children = list(set(find_child_windows(window, wanted_class="ToolbarWindow32")))
-        path = None
+        if w.GetClassName(window._hWnd) == "CabinetWClass":
+            hwnd = window._hWnd
 
-        for child in children:
-            parent = w.GetParent(child)
-            window_text = w.GetWindowText(child)
-            has_address = re.search(r".:\\", window_text)
+            current_path = get_explorer_window_path(hwnd)
 
-            if has_address and w.GetClassName(parent) == "Breadcrumb Parent":
-                start_idx = has_address.span()[0]
-                path = window_text[start_idx:]
-
-        if path: paths.append(path)
-
+            if current_path:
+                paths.append(current_path)
+    
     return paths
+            
+
+def get_explorer_window_path(MyHwnd):
+    try:
+        shell_app = comtypes.client.CreateObject("Shell.Application")
+        windows = shell_app.Windows()
+        for i in range(windows.Count):
+            explorer_window = windows.Item(i)
+ 
+            if explorer_window is None:
+                continue
+            if explorer_window.hwnd == MyHwnd:
+                path = os.path.basename(explorer_window.FullName)
+ 
+                if path.lower() == "explorer.exe":
+                    explore_path = explorer_window.Document.Folder.Items().Item().Path
+                    return explore_path
+    finally:
+        shell_app = None
